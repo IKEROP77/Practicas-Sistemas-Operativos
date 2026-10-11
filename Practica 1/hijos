@@ -1,0 +1,84 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+void vacio(){
+}
+
+int main(int argc, char *argv[]){
+	int n, levels, leaves, levelShmId, leafShmId;
+	int *levelPids, *leafPids;	
+	pid_t pid;
+
+	if(argc != 3 || atoi(argv[1]) <= 0 || atoi(argv[2]) <= 0){
+		printf("Uso: %s x y (mayores que 0)\n", argv[0]);
+	}
+	else{
+		levels = atoi(argv[1]);
+		leaves = atoi(argv[2]);
+
+		levelShmId = shmget(IPC_PRIVATE, sizeof(int) * levels, IPC_CREAT | 0666);
+		levelPids = (int *) shmat(levelShmId, 0, 0);
+
+		leafShmId = shmget(IPC_PRIVATE, sizeof(int) * leaves, IPC_CREAT | 0666);
+		leafPids = (int *) shmat(leafShmId, 0, 0);
+
+		for(n = 1; n <= levels; n++){
+			pid = fork();
+			if(pid != 0){
+				wait(NULL);	
+				break;
+			}
+			else{
+				levelPids[n - 1] = getpid();
+			}
+		}
+		if(n == 1){
+			printf("Soy el superpadre (%d) : mis hijos finales son: ", getpid());
+			for(n = 0; n < leaves; n++){
+				printf("%d", leafPids[n]);
+				if(n != leaves - 1){
+					printf(", ");
+				}
+			}
+			printf("\n");
+			shmdt((char *) levelPids);
+			shmdt((char *) leafPids);
+			shmctl(levelShmId, IPC_RMID, 0);
+			shmctl(leafShmId, IPC_RMID, 0);
+		}
+		else{
+			if(n == levels + 1){
+				for(n = 1; n <= leaves; n++){
+					pid = fork();
+					if(pid == 0){
+						leafPids[n - 1] = getpid();
+						printf("Soy el subhijo %d, mi padres son: ", getpid());
+						for(int k = 0; k < levels; k++){
+							printf("%d", levelPids[k]);
+							if(k != levels - 1){
+								printf(", ");
+							}
+						}
+						printf("\n");
+						signal(SIGALRM, vacio);
+						alarm(10);
+						pause();
+						break;
+					}
+				}
+				if(n == leaves + 1){	
+					for(n = 1; n <= leaves; n++){
+						wait(NULL);
+					}
+				}
+			}
+		}
+	}
+	return 0;
+}
