@@ -1,0 +1,75 @@
+#include <stdio.h>	
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+
+void splitFile(char *fileName, int chunkSize);
+
+
+void printError(char *msg){
+	write(2, msg, strlen(msg));
+}
+
+int main(int argc, char *argv[]){
+	if(argc != 3 || atoi(argv[2]) <= 0){
+		printError("Uso: hacha archivo tamanyo_trozo (tamanyo mayor que 0)\n");
+	}
+	else{
+		splitFile(argv[1], atoi(argv[2]));	
+	}
+	return 0;
+}
+
+void splitFile(char fileName[], int chunkSize){
+	int chunk;
+	int pipeFd[2];	
+	char outName[256];
+	int inFd, outFd;
+	struct stat fileInfo;	
+	int numChunks, bytesRead;
+	char *buffer;
+
+	buffer = (char *) malloc(sizeof(char) * chunkSize);	
+	inFd = open(fileName, O_RDONLY);
+	if(inFd < 0){
+		printError("Error. No existe el archivo\n");
+	}
+	else{
+		stat(fileName, &fileInfo);
+		numChunks = fileInfo.st_size / chunkSize;
+		if(fileInfo.st_size % chunkSize != 0){
+			numChunks++;	
+		}
+		for(chunk = 0; chunk < numChunks; chunk++){
+			pipe(pipeFd);	
+			if(fork() != 0){
+				
+				close(pipeFd[0]);
+				bytesRead = read(inFd, buffer, chunkSize);
+				write(pipeFd[1], buffer, bytesRead);
+				close(pipeFd[1]);	
+			}
+			else{
+				
+				close(pipeFd[1]);
+				sprintf(outName, "%s.h%02d", fileName, chunk);	
+				outFd = creat(outName, 0666);
+				while((bytesRead = read(pipeFd[0], buffer, chunkSize)) > 0){
+					write(outFd, buffer, bytesRead);
+				}
+				close(outFd);
+				close(pipeFd[0]);
+				break;
+			}
+		}
+		if(chunk == numChunks){
+			free(buffer);
+			for(chunk = 0; chunk < numChunks; chunk++){
+				wait(NULL);
+			}
+		}
+	}
+}
