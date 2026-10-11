@@ -1,0 +1,47 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/wait.h>
+ 
+
+void vacio(){
+}
+ 
+int main(int argc, char *argv[]){
+	int rows, cols, row, col;
+	pid_t pid;
+ 
+	if(argc != 3 || atoi(argv[1]) <= 0 || atoi(argv[2]) <= 0){
+		printf("Uso: %s filas columnas (mayores que 0)\n", argv[0]);
+	}
+	else{
+		rows = atoi(argv[1]);
+		cols = atoi(argv[2]);
+ 
+		
+		for(col = 1; col <= cols; col++){
+			pid = fork();
+			if(pid == 0){
+				
+				for(row = 1; row < rows; row++){
+					pid = fork();
+					if(pid != 0){
+						wait(NULL);	
+						exit(0);
+					}
+				}
+				
+				signal(SIGALRM, vacio);
+				alarm(10);
+				pause();
+				exit(0);
+			}
+		}
+		
+		for(col = 1; col <= cols; col++){
+			wait(NULL);
+		}
+	}
+	return 0;
+}
