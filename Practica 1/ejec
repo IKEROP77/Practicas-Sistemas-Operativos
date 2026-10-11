@@ -1,0 +1,116 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/wait.h>
+
+
+pid_t pidRoot, pidA, pidB, pidX, pidY, pidZ;
+
+
+void runPstree(){
+	if(fork() == 0){
+		execlp("pstree", "pstree", NULL);	
+		perror("Error en exec");
+		exit(1);
+	}
+	else{
+		wait(NULL);	
+		kill(pidRoot, SIGUSR2);
+	}
+}
+
+
+void destroyRoot(){
+	kill(pidA, SIGUSR2);
+}
+
+
+void destroyA(){
+	kill(pidB, SIGUSR2);
+}
+
+
+void vacio(){
+}
+
+int main(int argc, char *argv[]){
+	int seconds;
+
+	if(argc != 2){
+		printf("Uso: ./ejec segundos\n");
+	}
+	else{
+		seconds = atoi(argv[1]);
+		pidRoot = getpid();
+		printf("Soy el proceso ejec: mi pid es %d\n", pidRoot);
+		pidA = fork();
+		if(pidA != 0){
+			
+			signal(SIGUSR2, destroyRoot);
+			pause();	
+			wait(NULL);	
+			printf("Soy ejec (%d) y muero\n", pidRoot);
+			exit(0);
+		}
+		else{
+			
+			pidA = getpid();
+			printf("Soy el proceso A: mi pid es %d. Mi padre es %d\n", pidA, pidRoot);
+			pidB = fork();
+			if(pidB != 0){
+				signal(SIGUSR1, runPstree);
+				signal(SIGUSR2, destroyA);
+				pause();	
+				while(wait(NULL) != pidB);
+				printf("Soy A (%d) y muero\n", pidA);
+			}
+			else{
+				
+				pidB = getpid();
+				printf("Soy el proceso B: mi pid es %d. Mi padre es %d. Mi abuelo es %d\n", pidB, pidA, pidRoot);
+
+				pidX = fork();
+				if(pidX == 0){
+					printf("Soy el proceso X: mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d\n", getpid(), pidB, pidA, pidRoot);
+					signal(SIGUSR2, vacio);
+					pause();
+					printf("Soy X (%d) y muero\n", getpid());
+					exit(0);
+				}
+				pidY = fork();
+				if(pidY == 0){
+					printf("Soy el proceso Y: mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d\n", getpid(), pidB, pidA, pidRoot);
+					signal(SIGUSR2, vacio);
+					pause();
+					printf("Soy Y (%d) y muero\n", getpid());
+					exit(0);
+				}
+				pidZ = fork();
+				if(pidZ == 0){
+					printf("Soy el proceso Z: mi pid es %d. Mi padre es %d. Mi abuelo es %d. Mi bisabuelo es %d\n", getpid(), pidB, pidA, pidRoot);
+					signal(SIGUSR2, vacio);
+					signal(SIGALRM, vacio);
+					alarm(seconds);	
+					pause();	
+					kill(pidA, SIGUSR1);	
+					pause();	
+					printf("Soy Z (%d) y muero\n", getpid());
+					exit(0);
+				}
+				signal(SIGUSR2, vacio);
+				pause();	
+			
+				kill(pidZ, SIGUSR2);
+				wait(NULL);
+				kill(pidY, SIGUSR2);
+				wait(NULL);
+				kill(pidX, SIGUSR2);
+				wait(NULL);
+				printf("Soy B (%d) y muero\n", pidB);
+				exit(0);
+			}
+		}
+	}
+	return 0;
+}
